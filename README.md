@@ -11,11 +11,10 @@ To ensure compatibility, please set up a Python virtual environment with Python 
 1. **Install Miniforge** (a minimal installer for Conda specific to your system architecture):
     
     ```bash
-    wget "<https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$>(uname -m).sh"
+    wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
     bash Miniforge3-$(uname)-$(uname -m).sh
     export PATH="$HOME/miniforge3/bin:$PATH"
     source ~/.bashrc
-    
     ```
     
 2. **Install Mamba** (a fast version of Conda):
