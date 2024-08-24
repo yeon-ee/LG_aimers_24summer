@@ -1,7 +1,7 @@
 import pandas as pd
 from imblearn.under_sampling import RandomUnderSampler
 
-class undersample:
+class Undersample:
     def __init__(self, data: pd.DataFrame, target: str, undersample_size: int):
         """
         Initializes the Undersample class with the given data and parameters.
@@ -25,8 +25,15 @@ class undersample:
         """
         X, y = self._separate_features_and_target()
         
+        # Calculate the sampling strategy
+        # Assuming you want to undersample the majority class to a fixed size
+        class_counts = y.value_counts()
+        majority_class = class_counts.idxmax()
+        minority_class = class_counts.idxmin()
+        sampling_strategy = {majority_class: self.undersample_size, minority_class: len(y[y == minority_class])}
+        
         # Apply undersampling
-        undersampler = RandomUnderSampler(sampling_strategy={self.target: self.undersample_size}, random_state=self.random_state)
+        undersampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=self.random_state)
         X_resampled, y_resampled = undersampler.fit_resample(X, y)
         
         # Combine the resampled data

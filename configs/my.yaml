@@ -1,0 +1,21 @@
+folder_prefix: results/test
+split_apply: False # train1, 2로 나누기
+normalization_config:
+  apply: True
+  col_list: null  # null 이면 전체 컬럼에 대해 적용
+  method: min_max  # min_max, z_score, robust, max_abs
+encoding_config:
+  apply: True
+  col_list: null
+  method: one_hot   # one_hot, label, binary, hash, target  
+pca_config:
+  apply: False
+  col_list: null  # true면 무조건 값이 들어가야 함
+sampling_config:
+  apply: True
+  undersampling_apply: True
+  undersampling_size: 5000  #Normal의 수, 원래는 대략 38156개
+  oversampling_apply: True  # True, False: Abnormal의 수를 늘리자
+  oversampling_method: "SMOTE"
+  oversampling_ratio: 0.5    #SMOTE의 경우 0에서 1사이의 값, 0.5이면 Abnormal이 Normal의 50% 수준으로 증가
+ensemble_num: 1

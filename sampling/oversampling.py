@@ -5,7 +5,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.combine import SMOTETomek
 
 
-class oversample:
+class Oversample:
     def __init__(self, data:pd.DataFrame, target:str, numeric_method:str, ratio:float):
         self.data: pd.DataFrame = data
         self.target: str = target
