@@ -177,6 +177,6 @@ if __name__ == "__main__":
     ax.axis('tight')
     ax.axis('off')
     table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc = 'center', loc='center')
-    save_image_root = os.path.join(args.config["folder_prefix"], "df.png")
+    save_image_root = os.path.join(config["folder_prefix"], "df.png")
     plt.savefig(save_image_root, bbox_inches='tight', dpi=300)
     plt.close()
