@@ -1,7 +1,6 @@
 import pandas as pd
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
-import numpy as np 
 
 class Normalization:
     def __init__(self, df: pd.DataFrame, columns: Optional[List[str]] = None, method: str = 'min_max'):
