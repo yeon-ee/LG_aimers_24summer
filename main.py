@@ -168,9 +168,9 @@ if __name__ == "__main__":
     # save results
     df_sub = pd.read_csv('submission.csv')
     df_sub['target'] = final_predictions
-    save_root = os.path.join(args.config["folder_prefix"], "submission.csv")
-    if not os.path.exists(args.config["folder_prefix"]):
-        os.makedirs(args.config["folder_prefix"])
+    save_root = os.path.join(config["folder_prefix"], "submission.csv")
+    if not os.path.exists(config["folder_prefix"]):
+        os.makedirs(config["folder_prefix"])
     df_sub.to_csv(save_root, index=False)
 
     fig, ax = plt.subplots(figsize=(12, 8))  # Set the figure size as needed
