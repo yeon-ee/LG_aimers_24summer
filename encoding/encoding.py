@@ -1,110 +1,154 @@
 import pandas as pd
-from typing import List, Optional
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder, TargetEncoder
+from typing import List, Optional, Tuple
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 import category_encoders as ce
 
 class Encoding:
-    def __init__(self, df: pd.DataFrame, columns: Optional[List[str]] = None, method: str = 'one_hot', target_column: Optional[str] = None):
+    def __init__(self, train_df: pd.DataFrame, test_df: pd.DataFrame, 
+                 columns: Optional[List[str]] = None, method: str = 'one_hot', 
+                 target_column: Optional[str] = None):
         """
-        Initialize the Encoding with a DataFrame and the columns to be encoded.
+        Initialize the Encoding with a train and test DataFrame, the columns to be encoded, and encoding method.
         
         Parameters:
-        df (pandas.DataFrame): The input DataFrame.
-        columns (list): The list of column names to encode. Default is None.
-        method (str): The encoding method to use. Default is 'one_hot'.
-        target_column (str): The name of the target column, if applicable. Default is None.
+        train_df (pd.DataFrame): The training DataFrame.
+        test_df (pd.DataFrame): The testing DataFrame.
+        columns (list, optional): The list of column names to encode. If None, infer categorical columns.
+        method (str): The encoding method to use ('one_hot', 'label', 'binary', 'target').
+        target_column (str, optional): The name of the target column, if applicable.
         """
-        self.df: pd.DataFrame = df
-        self.target_column: Optional[str] = target_column
-        self.target: Optional[pd.Series] = None
+        self.train_df = train_df.copy()
+        self.test_df = test_df.copy()
+        self.target_column = target_column
+        self.target = None
         
         if self.target_column:
-            self.target = self.df[self.target_column]  # Store the target column
-            self.df = self.df.drop([self.target_column], axis=1)  # Drop the target column from the DataFrame
+            self.target = self.train_df[self.target_column]  # Store the target column
+            self.train_df = self.train_df.drop([self.target_column], axis=1)  # Drop the target column from the train DataFrame
         
         if columns is None:
-            self.columns: Optional[List[str]] = self.set_columns()
+            self.columns = self.set_columns()  # Set columns to be all non-numeric (categorical) columns
         else:
-            self.columns: Optional[List[str]] = columns
+            self.columns = columns
         
-        self.method: str = method
-        self.encoded_df: pd.DataFrame = self.encode_data()
+        self.method = method
+        self.encoder = None
     
     def set_columns(self) -> List[str]:
         """
-        Set the columns to be used for encoding.
+        Set the columns to be used for encoding. Uses all non-numeric columns if none provided.
+        
+        Returns:
+        List[str]: The list of column names to encode.
         """
-        # If no columns are provided, use all categorical (object) columns
-        self.columns = [col for col in self.df.columns if self.df[col].dtype == 'object']
+        self.columns = [col for col in self.train_df.columns if self.train_df[col].dtype == 'object']
         return self.columns
     
-    def encode_data(self) -> pd.DataFrame:
+    def handle_missing_values(self) -> None:
         """
-        Encode the columns based on the method.
+        Handle missing values by filling them with a placeholder value before encoding.
         """
-        if self.method == 'one_hot':
-            return self.one_hot_encoding()
-        elif self.method == 'label':
-            return self.label_encoding()
-        elif self.method == 'binary':
-            return self.binary_encoding()
-        elif self.method == 'hash':
-            return self.hash_encoding()
-        elif self.method == 'target':
-            return self.target_encoding()
-        else:
-            raise ValueError("Invalid encoding method. Please choose one of the following: 'one_hot', 'label', 'binary', 'hash', 'target'.")
-        
-    def one_hot_encoding(self) -> pd.DataFrame:
+        self.train_df[self.columns] = self.train_df[self.columns].fillna('MISSING')
+        self.test_df[self.columns] = self.test_df[self.columns].fillna('MISSING')
+    
+    def align_categories(self) -> None:
+        """
+        Align the categories between train and test data to ensure they have the same categories.
+        """
+        for col in self.columns:
+            combined = pd.concat([self.train_df[col], self.test_df[col]], axis=0)
+            combined = pd.Categorical(combined).categories
+            
+            self.train_df[col] = pd.Categorical(self.train_df[col], categories=combined)
+            self.test_df[col] = pd.Categorical(self.test_df[col], categories=combined)
+    
+    def one_hot_encoding(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform One-Hot Encoding on the specified columns.
+        
+        Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Encoded training and testing DataFrames.
         """
-        encoder = OneHotEncoder(sparse_output=False)
-        one_hot_encoded = encoder.fit_transform(self.df[self.columns])
-        one_hot_df = pd.DataFrame(one_hot_encoded, columns=encoder.get_feature_names_out(self.columns))
-        return pd.concat([self.df.drop(self.columns, axis=1), one_hot_df], axis=1)
-
-    def label_encoding(self) -> pd.DataFrame:
+        self.encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+        train_encoded = self.encoder.fit_transform(self.train_df[self.columns])
+        test_encoded = self.encoder.transform(self.test_df[self.columns])
+        train_encoded_df = pd.DataFrame(train_encoded, columns=self.encoder.get_feature_names_out(self.columns))
+        test_encoded_df = pd.DataFrame(test_encoded, columns=self.encoder.get_feature_names_out(self.columns))
+        # Reset index to ensure proper concatenation
+        train_final = pd.concat([self.train_df.drop(self.columns, axis=1).reset_index(drop=True), 
+                                train_encoded_df.reset_index(drop=True)], axis=1)
+        test_final = pd.concat([self.test_df.drop(self.columns, axis=1).reset_index(drop=True), 
+                                test_encoded_df.reset_index(drop=True)], axis=1)
+        return train_final, test_final
+    
+    def label_encoding(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform Label Encoding on the specified columns.
+        
+        Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Encoded training and testing DataFrames.
         """
-        encoder = LabelEncoder()
-        df_encoded = self.df.copy() 
+        self.encoder = LabelEncoder()
+        train_encoded_df = self.train_df.copy()
+        test_encoded_df = self.test_df.copy()
+        
         for col in self.columns:
-            df_encoded[col] = encoder.fit_transform(df_encoded[col])
-        return pd.concat([self.df.drop(self.columns, axis=1), df_encoded[self.columns]], axis=1)
+            self.encoder.fit(pd.concat([self.train_df[col], self.test_df[col]], axis=0))
+            train_encoded_df[col] = self.encoder.transform(self.train_df[col])
+            test_encoded_df[col] = self.encoder.transform(self.test_df[col])
+        
+        return train_encoded_df, test_encoded_df
     
-    def binary_encoding(self) -> pd.DataFrame:
+    def binary_encoding(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform Binary Encoding on the specified columns.
+        
+        Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Encoded training and testing DataFrames.
         """
-        encoder = ce.BinaryEncoder(cols=self.columns)
-        binary_encoded = encoder.fit_transform(self.df[self.columns])
-        return pd.concat([self.df.drop(self.columns, axis=1), binary_encoded], axis=1)
+        self.encoder = ce.BinaryEncoder(cols=self.columns)
+        train_encoded = self.encoder.fit_transform(self.train_df)
+        test_encoded = self.encoder.transform(self.test_df)
+        return train_encoded, test_encoded
     
-    def hash_encoding(self) -> pd.DataFrame:
-        """
-        Perform Hash Encoding on the specified columns.
-        """
-        encoder = ce.HashingEncoder(cols=self.columns)
-        hash_encoded = encoder.fit_transform(self.df[self.columns])
-        return pd.concat([self.df.drop(self.columns, axis=1), hash_encoded], axis=1)
-    
-    
-    def target_encoding(self) -> pd.DataFrame:
+    def target_encoding(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform Target Encoding on the specified columns.
+        
+        Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Encoded training and testing DataFrames.
         """
-        encoder = TargetEncoder(smooth="auto")
-        target_encoded = encoder.fit_transform(self.df[self.columns], self.target)
-        target_df = pd.DataFrame(target_encoded, columns=encoder.get_feature_names_out(self.columns))
-        return pd.concat([self.df.drop(self.columns, axis=1), target_df], axis=1)
-
+        if not self.target_column:
+            raise ValueError("Target encoding requires a target column.")
+        
+        self.encoder = ce.TargetEncoder(cols=self.columns)
+        train_encoded = self.encoder.fit_transform(self.train_df, self.target)
+        test_encoded = self.encoder.transform(self.test_df)
+        return train_encoded, test_encoded
     
-    def get_encoded_data(self) -> pd.DataFrame:
+    def get_encoded_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Get the encoded DataFrame, with the target column restored if applicable.
+        Perform encoding on the data and return the encoded train and test DataFrames.
+        
+        Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Encoded training and testing DataFrames.
         """
+        self.handle_missing_values()
+        self.align_categories()
+
+        if self.method == 'one_hot':
+            train_encoded_df, test_encoded_df = self.one_hot_encoding()
+        elif self.method == 'label':
+            train_encoded_df, test_encoded_df = self.label_encoding()
+        elif self.method == 'binary':
+            train_encoded_df, test_encoded_df = self.binary_encoding()
+        elif self.method == 'target':
+            train_encoded_df, test_encoded_df = self.target_encoding()
+        else:
+            raise ValueError("Invalid encoding method. Please choose one of 'one_hot', 'label', 'binary', 'target'.")
+
+        # If target column exists, add it back to the encoded dataframes
         if self.target_column:
-            self.encoded_df[self.target_column] = self.target  # Restore the target column
-        return self.encoded_df
+            train_encoded_df[self.target_column] = self.target
+
+        return train_encoded_df, test_encoded_df

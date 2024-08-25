@@ -47,5 +47,5 @@ class Undersample:
 
         """
         X = self.data.drop(columns=[self.target])
-        y = self.data[self.target]
+        y = self.data[self.target].astype(str)
         return X, y

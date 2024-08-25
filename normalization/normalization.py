@@ -68,9 +68,14 @@ class Normalization:
         Manage the missing values in the DataFrame.
         """
         df_copy = self.df.copy()
-        df_copy.replace('OK', np.nan, inplace=True) # Replace 'OK' with NaN
-        df_copy.dropna(axis=1, how='all', inplace=True) # Drop columns with all missing values
+        df_copy.replace('OK', np.nan, inplace=True)  # Replace 'OK' with NaN
+        
+        # Drop columns with any missing values
+        df_copy.dropna(axis=1, how='any', inplace=True)
+        
+        # Drop columns with only one unique value
         columns_to_drop = [col for col in df_copy.columns if df_copy[col].nunique() == 1]
-        df_copy.drop(columns=columns_to_drop, inplace=True) # Drop columns with only one unique value
+        df_copy.drop(columns=columns_to_drop, inplace=True)
+        
         self.df = df_copy
         return self.df
