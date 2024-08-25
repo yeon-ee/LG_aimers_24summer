@@ -146,7 +146,7 @@ def preprocessing(config_path: str):
         if config["sampling_config"]["apply"]:
             train_data = apply_sampling(train_data, config)
             logger.info(f"Sampling complete. Train_target distribution: {train_data.value_counts('target')}")
-        
+
         processed_train_list.append(train_data)
         processed_test_list.append(test_data)
 
@@ -161,52 +161,74 @@ if __name__ == "__main__":
 
     processed_train_list, processed_test_list = preprocessing(args.config)
 
-    for train, test in zip(processed_train_list, processed_test_list):
+    # Initialize an empty DataFrame to store all results
+    all_submissions_df = pd.DataFrame()
+
+    # Loop over the train and test datasets
+    for i, (train, test) in enumerate(zip(processed_train_list, processed_test_list), start=1):
+        set_id = test["Set ID"]
         common_columns = list(set(train.columns).intersection(test.columns)) 
         test = test[common_columns]
+        
         for col in train.columns:
             if col not in test.columns:
                 test[col] = "0"
         
-        # if target column is in test
         if "target" in test.columns:
             test = test.drop(columns=["target"], axis=1)
             
         train.reset_index(drop=True, inplace=True)
         test.reset_index(drop=True, inplace=True)
         
+        # PyCaret setup for the experiment
         clf_setup = setup(data=train,
-                          target="target",
-                          session_id=45,
-                          train_size=0.8)
+                        target="target",
+                        session_id=45,
+                        train_size=0.8)
 
         top_models = compare_models(n_select=int(config["ensemble_num"]))
         result_df = pull()
 
+        # Finalize the models
         if isinstance(top_models, list):
             final_models = [finalize_model(model) for model in top_models]
         else:
             final_models = [finalize_model(top_models)]
 
         predictions = []
+        
         for model in final_models:
             pred_df = predict_model(model, data=test)
-            predictions.append(pred_df['prediction_label'].values)
+            predictions.append(pred_df["prediction_label"]) 
+        
+        all_predictions_df = pd.DataFrame(predictions).T
+        all_predictions_df.columns = [f"model_{i}" for i in range(len(final_models))]
 
-        final_predictions = pd.DataFrame(predictions).mode().iloc[0].values
+        final_predictions_df = all_predictions_df.mode(axis=1)[0]
+        final_predictions_df.index = test.index
 
-        # save results
-        df_sub = pd.read_csv('submission.csv')
-        df_sub['target'] = final_predictions
-        save_root = os.path.join(config["folder_prefix"], "submission.csv")
-        if not os.path.exists(config["folder_prefix"]):
-            os.makedirs(config["folder_prefix"])
-        df_sub.to_csv(save_root, index=False)
+        submission_df = pd.DataFrame({
+            "Set ID": set_id,
+            "target": final_predictions_df
+        })
+        
+        all_submissions_df = pd.concat([all_submissions_df, submission_df], axis=0)
 
+        # Create the directory if it does not exist
+        save_image_root = os.path.join(config["folder_prefix"], "results", "test")
+        if not os.path.exists(save_image_root):
+            os.makedirs(save_image_root)
+
+        # Save the result_df as an image using matplotlib
         fig, ax = plt.subplots(figsize=(12, 8))  # Set the figure size as needed
         ax.axis('tight')
         ax.axis('off')
-        table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc = 'center', loc='center')
-        save_image_root = os.path.join(config["folder_prefix"], "df.png")
-        plt.savefig(save_image_root, bbox_inches='tight', dpi=300)
+        table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc='center', loc='center')
+        plt.savefig(os.path.join(save_image_root, f"df_{i}.png"), bbox_inches='tight', dpi=300)
         plt.close()
+
+    # Save the final submission to a CSV file
+    save_root = os.path.join(config["folder_prefix"], "submission.csv")
+    if not os.path.exists(config["folder_prefix"]):
+        os.makedirs(config["folder_prefix"])
+    all_submissions_df.to_csv(save_root, index=False)
