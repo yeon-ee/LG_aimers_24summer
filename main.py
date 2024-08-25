@@ -1,4 +1,3 @@
-# python main.py -c configs/my.yaml
 import matplotlib.pyplot as plt
 import pycaret
 from pycaret.classification import *    
@@ -103,28 +102,46 @@ def preprocessing(config_path: str):
     train_data = pd.read_csv("data/train.csv")
     test_data = pd.read_csv("data/test.csv")
 
-    # Apply normalization 
-    if config["normalization_config"]["apply"]:
-        train_data, test_data = apply_normalization(train_data, test_data, config)
-        logger.info("Normalization complete.")
+    # Apply split if configured
+    if config.get("split_apply", False):
+        train_data_1, train_data_2 = split_data(train_data)
+        test_data_1, test_data_2 = split_data(test_data)
+    else:
+        train_data_1, train_data_2 = train_data, None
+        test_data_1, test_data_2 = test_data, None
 
+    train_list = [(train_data_1, test_data_1)]
+    if train_data_2 is not None and test_data_2 is not None:
+        train_list.append((train_data_2, test_data_2))
 
-    # Apply encoding 
-    if config["encoding_config"]["apply"]:
-        train_data, test_data = apply_encoding(train_data, test_data, config)
-        logger.info("Encoding complete.")
-        logger.info(f"categorical data columns: {train_data.select_dtypes(include=['object']).columns}")    
+    processed_train_list = []
+    processed_test_list = []
 
-    # Apply PCA 
-    if config["pca_config"]["apply"]:
-        train_data, test_data = apply_pca(train_data, test_data, config)
-        logger.info("PCA complete.")    
+    for train_data, test_data in train_list:
+        # Apply normalization 
+        if config["normalization_config"]["apply"]:
+            train_data, test_data = apply_normalization(train_data, test_data, config)
+            logger.info("Normalization complete.")
 
-    if config["sampling_config"]["apply"]:
-        train_data = apply_sampling(train_data, config)
-        logger.info(f"Sampling complete. Train_target distribution: {train_data.value_counts('target')}")
+        # Apply encoding 
+        if config["encoding_config"]["apply"]:
+            train_data, test_data = apply_encoding(train_data, test_data, config)
+            logger.info("Encoding complete.")
+            logger.info(f"categorical data columns: {train_data.select_dtypes(include=['object']).columns}")    
 
-    return train_data, test_data
+        # Apply PCA 
+        if config["pca_config"]["apply"]:
+            train_data, test_data = apply_pca(train_data, test_data, config)
+            logger.info("PCA complete.")    
+
+        if config["sampling_config"]["apply"]:
+            train_data = apply_sampling(train_data, config)
+            logger.info(f"Sampling complete. Train_target distribution: {train_data.value_counts('target')}")
+
+        processed_train_list.append(train_data)
+        processed_test_list.append(test_data)
+
+    return processed_train_list, processed_test_list
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -133,50 +150,50 @@ if __name__ == "__main__":
     with open(args.config, "r") as file:
         config = yaml.safe_load(file)
 
-    train, test = preprocessing(args.config)
+    processed_train_list, processed_test_list = preprocessing(args.config)
 
-    common_columns = list(set(train.columns).intersection(test.columns)) 
-    test = test[common_columns]
-    for col in train.columns:
-        if col not in test.columns:
-            test[col] = "0"
-    
-    # if target column is in test
-    if "target" in test.columns:
-        test = test.drop(columns=["target"], axis=1)
-    
-    
-    clf_setup = setup(data=train,
-                      target="target",
-                      session_id=45,
-                      train_size=0.8)
-    top_models = compare_models(n_select=int(config["ensemble_num"]))
-    result_df = pull()
+    for train, test in zip(processed_train_list, processed_test_list):
+        common_columns = list(set(train.columns).intersection(test.columns)) 
+        test = test[common_columns]
+        for col in train.columns:
+            if col not in test.columns:
+                test[col] = "0"
+        
+        # if target column is in test
+        if "target" in test.columns:
+            test = test.drop(columns=["target"], axis=1)
+        
+        clf_setup = setup(data=train,
+                          target="target",
+                          session_id=45,
+                          train_size=0.8)
+        top_models = compare_models(n_select=int(config["ensemble_num"]))
+        result_df = pull()
 
-    if isinstance(top_models, list):
-        final_models = [finalize_model(model) for model in top_models]
-    else:
-        final_models = [finalize_model(top_models)]
+        if isinstance(top_models, list):
+            final_models = [finalize_model(model) for model in top_models]
+        else:
+            final_models = [finalize_model(top_models)]
 
-    predictions = []
-    for model in final_models:
-        pred_df = predict_model(model, data=test)
-        predictions.append(pred_df['prediction_label'].values)
+        predictions = []
+        for model in final_models:
+            pred_df = predict_model(model, data=test)
+            predictions.append(pred_df['prediction_label'].values)
 
-    final_predictions = pd.DataFrame(predictions).mode().iloc[0].values
+        final_predictions = pd.DataFrame(predictions).mode().iloc[0].values
 
-    # save results
-    df_sub = pd.read_csv('submission.csv')
-    df_sub['target'] = final_predictions
-    save_root = os.path.join(config["folder_prefix"], "submission.csv")
-    if not os.path.exists(config["folder_prefix"]):
-        os.makedirs(config["folder_prefix"])
-    df_sub.to_csv(save_root, index=False)
+        # save results
+        df_sub = pd.read_csv('submission.csv')
+        df_sub['target'] = final_predictions
+        save_root = os.path.join(config["folder_prefix"], "submission.csv")
+        if not os.path.exists(config["folder_prefix"]):
+            os.makedirs(config["folder_prefix"])
+        df_sub.to_csv(save_root, index=False)
 
-    fig, ax = plt.subplots(figsize=(12, 8))  # Set the figure size as needed
-    ax.axis('tight')
-    ax.axis('off')
-    table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc = 'center', loc='center')
-    save_image_root = os.path.join(config["folder_prefix"], "df.png")
-    plt.savefig(save_image_root, bbox_inches='tight', dpi=300)
-    plt.close()
+        fig, ax = plt.subplots(figsize=(12, 8))  # Set the figure size as needed
+        ax.axis('tight')
+        ax.axis('off')
+        table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc = 'center', loc='center')
+        save_image_root = os.path.join(config["folder_prefix"], "df.png")
+        plt.savefig(save_image_root, bbox_inches='tight', dpi=300)
+        plt.close()
