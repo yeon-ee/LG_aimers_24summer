@@ -171,6 +171,10 @@ if __name__ == "__main__":
         # if target column is in test
         if "target" in test.columns:
             test = test.drop(columns=["target"], axis=1)
+            
+        train.reset_index(drop=True, inplace=True)
+        test.reset_index(drop=True, inplace=True)
+        
         clf_setup = setup(data=train,
                           target="target",
                           session_id=45,
