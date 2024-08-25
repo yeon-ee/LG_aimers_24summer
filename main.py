@@ -215,16 +215,15 @@ if __name__ == "__main__":
         all_submissions_df = pd.concat([all_submissions_df, submission_df], axis=0)
 
         # Create the directory if it does not exist
-        save_image_root = os.path.join(config["folder_prefix"], "results", "test")
-        if not os.path.exists(save_image_root):
-            os.makedirs(save_image_root)
+        if not os.path.exists(config["folder_prefix"]):
+            os.makedirs(config["folder_prefix"])
 
         # Save the result_df as an image using matplotlib
         fig, ax = plt.subplots(figsize=(12, 8))  # Set the figure size as needed
         ax.axis('tight')
         ax.axis('off')
         table = ax.table(cellText=result_df.values, colLabels=result_df.columns, cellLoc='center', loc='center')
-        plt.savefig(os.path.join(save_image_root, f"df_{i}.png"), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join(config["folder_prefix"], f"df_{i}.png"), bbox_inches='tight', dpi=300)
         plt.close()
 
     # Save the final submission to a CSV file
