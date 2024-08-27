@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 def load_config(config_path: str) -> dict:
     """Load the YAML configuration file."""
+    # 윈도우의 인코딩 이슈
+    # with open(config_path, "r", encoding='utf-8') as file:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     return config
@@ -156,6 +158,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="Path to the config file", required=True)
     args = parser.parse_args()
+    #윈도우의 인코딩 이슈
+    #with open(args.config, "r", encoding='utf-8') as file:
     with open(args.config, "r") as file:
         config = yaml.safe_load(file)
 
